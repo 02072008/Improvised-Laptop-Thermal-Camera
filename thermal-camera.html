@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thermal Vision — IR Camera Analyzer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #21262d;
+      --muted: #8b949e;
+      --text: #e6edf3;
+      --accent: #f77b2a;
+      --cyan: #00e5ff;
+      --red: #f85149;
+      --green: #3fb950;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo {
+      width: 32px; height: 32px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .logo svg { display: block; }
+
+    .logo-text h1 { font-size: 13px; font-weight: 700; letter-spacing: -0.2px; }
+    .logo-text p { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+    .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+    .fps-badge {
+      font-family: monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    button {
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: opacity 0.15s, background 0.15s;
+    }
+
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-danger  { background: var(--red);    color: #fff; }
+    .btn-ghost   { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+    .layout { display: flex; flex: 1; min-height: 0; }
+
+    /* ── SIDEBAR ── */
+    aside {
+      width: 220px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      overflow-y: auto;
+    }
+
+    aside::-webkit-scrollbar { width: 4px; }
+    aside::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    select {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: var(--radius);
+      padding: 6px 8px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      cursor: pointer;
+    }
+    select:focus { border-color: var(--accent); }
+
+    .ir-badge {
+      font-size: 10px;
+      color: var(--accent);
+      margin-top: 4px;
+    }
+
+    .btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+
+    .toggle-btn {
+      padding: 5px 8px;
+      font-size: 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      text-transform: capitalize;
+      font-weight: 500;
+    }
+    .toggle-btn.active {
+      background: var(--accent);
+      color: #0d1117;
+      border-color: var(--accent);
+    }
+
+    .preset-list { display: flex; flex-direction: column; gap: 4px; }
+
+    .preset-btn {
+      padding: 5px 8px;
+      font-size: 11px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      text-align: left;
+      font-weight: 400;
+    }
+    .preset-btn.active {
+      background: var(--accent);
+      color: #0d1117;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .range-inputs { display: flex; gap: 6px; margin-top: 6px; }
+    .range-inputs label { flex: 1; }
+    .range-inputs span { font-size: 10px; color: var(--muted); display: block; margin-bottom: 3px; }
+    .range-inputs input[type="number"] {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 5px 6px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+    }
+    .range-inputs input[type="number"]:focus { border-color: var(--accent); }
+
+    .slider-row { display: flex; flex-direction: column; gap: 2px; }
+    .slider-header { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .checkbox-row input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; width: 14px; height: 14px; }
+
+    /* ── MAIN ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      gap: 10px;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .cam-container {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+    }
+
+    #displayCanvas {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      border-radius: 8px;
+      cursor: crosshair;
+      display: block;
+    }
+
+    .idle-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      text-align: center;
+    }
+
+    .idle-icon {
+      width: 60px; height: 60px;
+      background: var(--border);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .idle-screen h2 { font-size: 15px; }
+    .idle-screen p { font-size: 12px; color: var(--muted); }
+
+    .error-box {
+      background: rgba(248,81,73,0.12);
+      border: 1px solid rgba(248,81,73,0.35);
+      color: #f97583;
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    /* hotspot label overlay */
+    #hotspotLabel {
+      position: absolute;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 3px 7px;
+      border-radius: 5px;
+      pointer-events: none;
+      white-space: nowrap;
+      display: none;
+    }
+
+    /* ── STATS ROW ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.5fr;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+
+    .stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+    .stat-value { font-size: 22px; font-weight: 700; font-family: monospace; color: var(--accent); }
+    .stat-value.cyan { color: var(--cyan); }
+    .stat-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .clear-link { color: var(--red); cursor: pointer; text-decoration: none; }
+    .clear-link:hover { text-decoration: underline; }
+
+    .colorscale-bar {
+      height: 14px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+    }
+    .colorscale-labels { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
+
+    /* ── INFO BAR ── */
+    .info-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      font-size: 10px;
+      color: #8b949e;
+      line-height: 1.6;
+      flex-shrink: 0;
+    }
+    .info-bar strong { color: var(--accent); }
+
+    /* scrollbar for aside */
+    aside { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="5"></circle>
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+    </svg>
+  </div>
+  <div class="logo-text">
+    <h1>Thermal Vision</h1>
+    <p>IR Camera Temperature Analyzer</p>
+  </div>
+  <div class="header-actions">
+    <span class="fps-badge" id="fpsBadge"></span>
+    <button class="btn-primary" id="startBtn" onclick="startCamera()">Start Camera</button>
+    <button class="btn-danger" id="stopBtn" onclick="stopCamera()" style="display:none">Stop</button>
+    <button class="btn-ghost" id="snapBtn" onclick="takeSnapshot()" style="display:none">Save PNG</button>
+    <button class="btn-ghost" onclick="exportFile()">⬇ Download HTML</button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div id="errorBox" class="error-box" style="display:none"></div>
+
+    <section>
+      <span class="section-label">Camera</span>
+      <select id="cameraSelect" onchange="switchCamera()"><option value="2f85cd0ac8eeecd42ee827276b1e47e27a62b1ea8fb415192b58b0c580552a41">Poly Camera Pro</option><option value="223a0545be4922622ed14506f13f9e2d40b275cf1df479ea58f16a61ccff9b3b">HP 5MP Camera</option><option value="57f833932398a675022f563035e72dd55666f89f69aaecac3fd1bcd68f79f1cf">OBS Virtual Camera</option></select>
+      <div class="ir-badge" id="irBadge" style="display: block;">IR sensor detected ✦</div>
+    </section>
+
+    <section>
+      <span class="section-label">Colormap</span>
+      <div class="btn-grid" id="colormapBtns">
+        <button class="toggle-btn active" data-map="iron" onclick="setColormap(this)">Iron</button>
+        <button class="toggle-btn" data-map="rainbow" onclick="setColormap(this)">Rainbow</button>
+        <button class="toggle-btn" data-map="inferno" onclick="setColormap(this)">Inferno</button>
+        <button class="toggle-btn" data-map="arctic" onclick="setColormap(this)">Arctic</button>
+      </div>
+    </section>
+
+    <section>
+      <span class="section-label">Temperature Range</span>
+      <div class="preset-list">
+        <button class="preset-btn active" data-preset="body" onclick="setPreset(this)">Body (30–38°C)</button>
+        <button class="preset-btn" data-preset="room" onclick="setPreset(this)">Room (18–35°C)</button>
+        <button class="preset-btn" data-preset="outdoor" onclick="setPreset(this)">Outdoor (-10–50°C)</button>
+        <button class="preset-btn" data-preset="custom" onclick="setPreset(this)">Custom</button>
+      </div>
+      <div class="range-inputs">
+        <label><span>Min °C</span><input type="number" id="minTemp" value="30" oninput="onCustomTemp()"></label>
+        <label><span>Max °C</span><input type="number" id="maxTemp" value="38" oninput="onCustomTemp()"></label>
+      </div>
+    </section>
+
+    <section>
+      <span class="section-label">Image Processing</span>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="slider-row">
+          <div class="slider-header"><span>Contrast</span><span id="contrastVal">1.5x</span></div>
+          <input type="range" id="contrast" min="0.5" max="4" step="0.1" value="1.5" oninput="document.getElementById('contrastVal').textContent=this.value+'x'">
+        </div>
+        <div class="slider-row">
+          <div class="slider-header"><span>Brightness</span><span id="brightnessVal">0.00</span></div>
+          <input type="range" id="brightness" min="-0.3" max="0.3" step="0.01" value="0" oninput="document.getElementById('brightnessVal').textContent=(this.value&gt;0?'+':'')+parseFloat(this.value).toFixed(2)">
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <span class="section-label">Options</span>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <label class="checkbox-row"><input type="checkbox" id="showHotspot" checked=""> Track hotspot</label>
+        <label class="checkbox-row"><input type="checkbox" id="celsius" checked=""> Celsius (uncheck for °F)</label>
+      </div>
+    </section>
+  </aside>
+
+  <main>
+    <div class="cam-container" id="camContainer">
+      <div class="idle-screen" id="idleScreen">
+        <div class="idle-icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f77b2a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+        </div>
+        <h2>Ready to scan</h2>
+        <p>Click "Start Camera" to begin thermal analysis</p>
+        <button class="btn-primary" onclick="startCamera()">Start Camera</button>
+      </div>
+
+      <video id="video" autoplay="" muted="" playsinline="" style="display:none"></video>
+      <canvas id="offscreen" style="display:none"></canvas>
+      <canvas id="displayCanvas" style="display:none" onclick="probePoint(event)"></canvas>
+      <div id="hotspotLabel"></div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Hotspot Temp</div>
+        <div class="stat-value" id="statHotspot">—</div>
+        <div class="stat-sub">Brightest pixel</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Selected Point</div>
+        <div class="stat-value cyan" id="statProbe">—</div>
+        <div class="stat-sub" id="statProbeSub">Click on image to probe</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Color Scale</div>
+        <div class="colorscale-bar" id="colorscaleBar" style="background: linear-gradient(to right, rgb(0, 0, 0), rgb(60, 0, 120), rgb(180, 0, 60), rgb(220, 80, 0), rgb(255, 180, 0), rgb(255, 240, 140), rgb(255, 255, 255));"></div>
+        <div class="colorscale-labels">
+          <span id="scaleMin">30°C</span>
+          <span id="scaleMax">38°C</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-bar">
+      <strong>How it works:</strong> This tool applies a thermal color map to your camera's live video. Brighter pixels → hotter colors. Select your IR camera device from the dropdown for real thermal data. On standard RGB cameras this creates a heat-map visualization — temperature readings are estimates based on relative pixel brightness within the configured range.
+    </div>
+  </main>
+</div>
+
+<script>
+// ─── State ─────────────────────────────────────────────────────────────────
+let stream = null;
+let animId = null;
+let colormap = "iron";
+let running = false;
+let probePixel = null;   // {x, y, lum}
+let fpsFrames = 0;
+let fpsLast = performance.now();
+let globalMinLum = 0, globalMaxLum = 255;
+
+const PRESETS = {
+  body:    { min: 30, max: 38 },
+  room:    { min: 18, max: 35 },
+  outdoor: { min: -10, max: 50 },
+  custom:  { min: 15, max: 45 },
+};
+
+// ─── Colormap LUT ──────────────────────────────────────────────────────────
+function lerp(a, b, t) { return a + (b - a) * t; }
+function lerpRGB(c1, c2, t) {
+  return [lerp(c1[0], c2[0], t), lerp(c1[1], c2[1], t), lerp(c1[2], c2[2], t)];
+}
+function makeGradientLUT(stops, size = 256) {
+  const lut = new Uint8ClampedArray(size * 3);
+  for (let i = 0; i < size; i++) {
+    const v = i / (size - 1);
+    let s1 = stops[0], s2 = stops[stops.length - 1];
+    for (let j = 0; j < stops.length - 1; j++) {
+      if (v >= stops[j].t && v <= stops[j + 1].t) { s1 = stops[j]; s2 = stops[j + 1]; break; }
+    }
+    const segLen = s2.t - s1.t;
+    const t = segLen === 0 ? 0 : (v - s1.t) / segLen;
+    const [r, g, b] = lerpRGB(s1.rgb, s2.rgb, t);
+    lut[i * 3] = r | 0; lut[i * 3 + 1] = g | 0; lut[i * 3 + 2] = b | 0;
+  }
+  return lut;
+}
+
+const LUTS = {
+  iron:    makeGradientLUT([{t:0,rgb:[0,0,0]},{t:.25,rgb:[60,0,120]},{t:.45,rgb:[180,0,60]},{t:.65,rgb:[220,80,0]},{t:.80,rgb:[255,180,0]},{t:.92,rgb:[255,240,140]},{t:1,rgb:[255,255,255]}]),
+  rainbow: makeGradientLUT([{t:0,rgb:[0,0,128]},{t:.17,rgb:[0,0,255]},{t:.33,rgb:[0,255,255]},{t:.5,rgb:[0,255,0]},{t:.67,rgb:[255,255,0]},{t:.83,rgb:[255,128,0]},{t:1,rgb:[255,0,0]}]),
+  inferno: makeGradientLUT([{t:0,rgb:[0,0,4]},{t:.2,rgb:[40,11,84]},{t:.4,rgb:[101,21,110]},{t:.6,rgb:[180,54,70]},{t:.8,rgb:[237,121,15]},{t:.95,rgb:[252,225,90]},{t:1,rgb:[252,255,164]}]),
+  arctic:  makeGradientLUT([{t:0,rgb:[0,0,80]},{t:.25,rgb:[0,50,200]},{t:.5,rgb:[0,200,240]},{t:.75,rgb:[255,255,255]},{t:1,rgb:[255,180,180]}]),
+};
+
+const COLORSCALE_CSS = {
+  iron:    "linear-gradient(to right,#000,#3c0078,#b4003c,#dc5000,#ffb400,#fff08c,#fff)",
+  rainbow: "linear-gradient(to right,#000080,#00f,#0ff,#0f0,#ff0,#f80,#f00)",
+  inferno: "linear-gradient(to right,#000004,#280b54,#65156e,#b43646,#ed790f,#fce15a,#fcffa4)",
+  arctic:  "linear-gradient(to right,#000050,#0032c8,#00c8f0,#fff,#ffb4b4)",
+};
+
+// ─── Camera ────────────────────────────────────────────────────────────────
+async function loadCameraList() {
+  try {
+    await navigator.mediaDevices.getUserMedia({ video: true });
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d => d.kind === "videoinput");
+    const sel = document.getElementById("cameraSelect");
+    sel.innerHTML = "";
+    cams.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c.deviceId;
+      opt.textContent = c.label || "Camera " + c.deviceId.slice(0, 6);
+      sel.appendChild(opt);
+    });
+    if (cams.length === 0) {
+      sel.innerHTML = "<option>No cameras found</option>";
+    }
+    const irCam = cams.find(c => /ir|infrared|thermal|depth/i.test(c.label));
+    if (irCam) { sel.value = irCam.deviceId; document.getElementById("irBadge").style.display = "block"; }
+  } catch (e) {
+    showError("Camera permission denied. Please allow camera access and reload the page.");
+  }
+}
+
+function switchCamera() {
+  if (running) startCamera();
+}
+
+async function startCamera() {
+  stopCamera();
+  clearError();
+  const deviceId = document.getElementById("cameraSelect").value;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: deviceId ? { exact: deviceId } : undefined, width: { ideal: 640 }, height: { ideal: 480 } }
+    });
+    const video = document.getElementById("video");
+    video.srcObject = stream;
+    await video.play();
+    running = true;
+    document.getElementById("startBtn").style.display = "none";
+    document.getElementById("stopBtn").style.display = "";
+    document.getElementById("snapBtn").style.display = "";
+    document.getElementById("idleScreen").style.display = "none";
+    document.getElementById("displayCanvas").style.display = "block";
+    renderLoop();
+  } catch (e) {
+    showError("Failed to start camera: " + e.message);
+  }
+}
+
+function stopCamera() {
+  running = false;
+  cancelAnimationFrame(animId);
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  document.getElementById("startBtn").style.display = "";
+  document.getElementById("stopBtn").style.display = "none";
+  document.getElementById("snapBtn").style.display = "none";
+  document.getElementById("idleScreen").style.display = "flex";
+  document.getElementById("displayCanvas").style.display = "none";
+  document.getElementById("hotspotLabel").style.display = "none";
+  document.getElementById("fpsBadge").textContent = "";
+  document.getElementById("statHotspot").textContent = "—";
+  document.getElementById("statProbe").textContent = "—";
+}
+
+// ─── Render Loop ───────────────────────────────────────────────────────────
+function renderLoop() {
+  if (!running) return;
+  const video     = document.getElementById("video");
+  const offscreen = document.getElementById("offscreen");
+  const display   = document.getElementById("displayCanvas");
+
+  if (!video.videoWidth) { animId = requestAnimationFrame(renderLoop); return; }
+
+  const w = video.videoWidth, h = video.videoHeight;
+  if (offscreen.width !== w || offscreen.height !== h) {
+    offscreen.width = display.width = w;
+    offscreen.height = display.height = h;
+  }
+
+  const octx = offscreen.getContext("2d", { willReadFrequently: true });
+  octx.drawImage(video, 0, 0, w, h);
+  const frame = octx.getImageData(0, 0, w, h);
+  const src = frame.data;
+
+  const contrast   = parseFloat(document.getElementById("contrast").value);
+  const brightness = parseFloat(document.getElementById("brightness").value);
+  const lut = LUTS[colormap];
+
+  const lums = new Uint8Array(w * h);
+  let minLum = 255, maxLum = 0;
+  let hotIdx = 0;
+
+  for (let i = 0; i < w * h; i++) {
+    const si = i * 4;
+    const lum = (0.299 * src[si] + 0.587 * src[si + 1] + 0.114 * src[si + 2]) | 0;
+    lums[i] = lum;
+    if (lum < minLum) minLum = lum;
+    if (lum > maxLum) { maxLum = lum; hotIdx = i; }
+  }
+  globalMinLum = minLum; globalMaxLum = maxLum;
+
+  const range = maxLum - minLum || 1;
+  const out = new ImageData(w, h);
+  const dst = out.data;
+
+  for (let i = 0; i < w * h; i++) {
+    let n = (lums[i] - minLum) / range;
+    n = Math.max(0, Math.min(1, (n - 0.5) * contrast + 0.5 + brightness));
+    const idx = (n * 255 + 0.5) | 0;
+    const di = i * 4, li = idx * 3;
+    dst[di] = lut[li]; dst[di+1] = lut[li+1]; dst[di+2] = lut[li+2]; dst[di+3] = 255;
+  }
+
+  const dctx = display.getContext("2d");
+  dctx.putImageData(out, 0, 0);
+
+  const hotX = hotIdx % w, hotY = (hotIdx / w) | 0;
+  const hotTemp = lumToTemp(maxLum, minLum, maxLum);
+
+  if (document.getElementById("showHotspot").checked) {
+    dctx.beginPath();
+    dctx.arc(hotX, hotY, 6, 0, Math.PI * 2);
+    dctx.strokeStyle = "white"; dctx.lineWidth = 2; dctx.stroke();
+    dctx.beginPath();
+    dctx.arc(hotX, hotY, 3, 0, Math.PI * 2);
+    dctx.fillStyle = "white"; dctx.fill();
+
+    const rect = display.getBoundingClientRect();
+    const sx = rect.width / w, sy = rect.height / h;
+    const container = document.getElementById("camContainer");
+    const cr = container.getBoundingClientRect();
+    const dr = display.getBoundingClientRect();
+    const label = document.getElementById("hotspotLabel");
+    label.textContent = formatTemp(hotTemp);
+    label.style.display = "block";
+    label.style.left = (dr.left - cr.left + hotX * sx + 10) + "px";
+    label.style.top  = (dr.top  - cr.top  + hotY * sy - 20) + "px";
+  } else {
+    document.getElementById("hotspotLabel").style.display = "none";
+  }
+
+  document.getElementById("statHotspot").textContent = running ? formatTemp(hotTemp) : "—";
+
+  if (probePixel) {
+    const px = probePixel;
+    dctx.beginPath();
+    dctx.arc(px.x, px.y, 7, 0, Math.PI * 2);
+    dctx.strokeStyle = "#00e5ff"; dctx.lineWidth = 2; dctx.stroke();
+    dctx.beginPath();
+    dctx.moveTo(px.x - 10, px.y); dctx.lineTo(px.x + 10, px.y);
+    dctx.moveTo(px.x, px.y - 10); dctx.lineTo(px.x, px.y + 10);
+    dctx.strokeStyle = "#00e5ff"; dctx.lineWidth = 1.5; dctx.stroke();
+    const t = lumToTemp(px.lum, minLum, maxLum);
+    document.getElementById("statProbe").textContent = formatTemp(t);
+  }
+
+  // FPS
+  fpsFrames++;
+  const now = performance.now();
+  if (now - fpsLast >= 1000) {
+    document.getElementById("fpsBadge").textContent = Math.round(fpsFrames * 1000 / (now - fpsLast)) + " fps";
+    fpsFrames = 0; fpsLast = now;
+  }
+
+  animId = requestAnimationFrame(renderLoop);
+}
+
+// ─── Temperature helpers ───────────────────────────────────────────────────
+function lumToTemp(lum, minLum, maxLum) {
+  const minT = parseInt(document.getElementById("minTemp").value);
+  const maxT = parseInt(document.getElementById("maxTemp").value);
+  const range = maxLum - minLum || 1;
+  return minT + ((lum - minLum) / range) * (maxT - minT);
+}
+
+function formatTemp(c) {
+  if (document.getElementById("celsius").checked) return c.toFixed(1) + "°C";
+  return (c * 9 / 5 + 32).toFixed(1) + "°F";
+}
+
+function updateScaleLabels() {
+  const minT = parseInt(document.getElementById("minTemp").value);
+  const maxT = parseInt(document.getElementById("maxTemp").value);
+  const cel  = document.getElementById("celsius").checked;
+  document.getElementById("scaleMin").textContent = cel ? minT + "°C" : Math.round(minT * 9/5 + 32) + "°F";
+  document.getElementById("scaleMax").textContent = cel ? maxT + "°C" : Math.round(maxT * 9/5 + 32) + "°F";
+}
+
+document.getElementById("celsius").addEventListener("change", updateScaleLabels);
+document.getElementById("minTemp").addEventListener("input",  updateScaleLabels);
+document.getElementById("maxTemp").addEventListener("input",  updateScaleLabels);
+
+// ─── Probe (click to measure) ──────────────────────────────────────────────
+function probePoint(e) {
+  if (!running) return;
+  const canvas = document.getElementById("displayCanvas");
+  const rect   = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = Math.round((e.clientX - rect.left) * scaleX);
+  const y = Math.round((e.clientY - rect.top)  * scaleY);
+
+  const octx = document.getElementById("offscreen").getContext("2d", { willReadFrequently: true });
+  const px = octx.getImageData(x, y, 1, 1).data;
+  const lum = (0.299 * px[0] + 0.587 * px[1] + 0.114 * px[2]) | 0;
+  probePixel = { x, y, lum };
+
+  const sub = document.getElementById("statProbeSub");
+  sub.innerHTML = `At (${x}, ${y}) <a class="clear-link" href="#" onclick="clearProbe(event)">clear</a>`;
+}
+
+function clearProbe(e) {
+  if (e) e.preventDefault();
+  probePixel = null;
+  document.getElementById("statProbe").textContent = "—";
+  document.getElementById("statProbeSub").textContent = "Click on image to probe";
+}
+
+// ─── UI controls ──────────────────────────────────────────────────────────
+function setColormap(btn) {
+  colormap = btn.dataset.map;
+  document.querySelectorAll("#colormapBtns .toggle-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("colorscaleBar").style.background = COLORSCALE_CSS[colormap];
+}
+
+function setPreset(btn) {
+  const preset = btn.dataset.preset;
+  document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  if (preset !== "custom") {
+    document.getElementById("minTemp").value = PRESETS[preset].min;
+    document.getElementById("maxTemp").value = PRESETS[preset].max;
+    updateScaleLabels();
+  }
+}
+
+function onCustomTemp() {
+  document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
+  document.querySelector('.preset-btn[data-preset="custom"]').classList.add("active");
+  updateScaleLabels();
+}
+
+// ─── Snapshot ─────────────────────────────────────────────────────────────
+function takeSnapshot() {
+  const canvas = document.getElementById("displayCanvas");
+  const link = document.createElement("a");
+  link.download = "thermal_" + Date.now() + ".png";
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+// ─── Export (download this HTML file) ─────────────────────────────────────
+function exportFile() {
+  const html = document.documentElement.outerHTML;
+  const blob = new Blob(["<!DOCTYPE html>\n" + html], { type: "text/html" });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "thermal-camera.html";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ─── Error helpers ─────────────────────────────────────────────────────────
+function showError(msg) {
+  const box = document.getElementById("errorBox");
+  box.textContent = msg;
+  box.style.display = "block";
+}
+function clearError() {
+  const box = document.getElementById("errorBox");
+  box.textContent = "";
+  box.style.display = "none";
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────────
+document.getElementById("colorscaleBar").style.background = COLORSCALE_CSS["iron"];
+loadCameraList();
+</script>
+<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-repl-id="00cb0046-b2ca-4e08-a12c-c72b61acbe57"></script>
+
+<div id="replit-pill-host"></div></body></html>
